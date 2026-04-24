@@ -179,6 +179,16 @@ export default function MeatCountPage() {
     return a.name.localeCompare(b.name);
   });
 
+  const resolveExpr = (value: string): string => {
+    const trimmed = value.trim();
+    if (!trimmed || !/[+]/.test(trimmed)) return trimmed;
+    if (!/^[\d\s.+]+$/.test(trimmed)) return trimmed;
+    const parts = trimmed.split("+").map((s) => parseFloat(s.trim()));
+    if (parts.some(isNaN)) return trimmed;
+    const sum = parts.reduce((a, b) => a + b, 0);
+    return String(Math.round(sum * 10000) / 10000);
+  };
+
   // Build summary: sum counted per product, compare against system stock
   const summary: SummaryRow[] = [];
   const countedByProduct: Record<number, number> = {};
@@ -201,16 +211,6 @@ export default function MeatCountPage() {
   summary.sort((a, b) => a.product.name.localeCompare(b.product.name));
 
   const hasDirty = Object.values(dirty).some((row) => Object.values(row).some(Boolean));
-
-  const resolveExpr = (value: string): string => {
-    const trimmed = value.trim();
-    if (!trimmed || !/[+]/.test(trimmed)) return trimmed;
-    if (!/^[\d\s.+]+$/.test(trimmed)) return trimmed;
-    const parts = trimmed.split("+").map((s) => parseFloat(s.trim()));
-    if (parts.some(isNaN)) return trimmed;
-    const sum = parts.reduce((a, b) => a + b, 0);
-    return String(Math.round(sum * 10000) / 10000);
-  };
 
   return (
     <div className="space-y-6 pb-8">
