@@ -181,11 +181,11 @@ export default function MeatCountPage() {
 
   const resolveExpr = (value: string): string => {
     const trimmed = value.trim();
-    if (!trimmed || !/[+]/.test(trimmed)) return trimmed;
-    if (!/^[\d\s.+]+$/.test(trimmed)) return trimmed;
-    const parts = trimmed.split("+").map((s) => parseFloat(s.trim()));
-    if (parts.some(isNaN)) return trimmed;
-    const sum = parts.reduce((a, b) => a + b, 0);
+    if (!trimmed || !/[+\-]/.test(trimmed)) return trimmed;
+    if (!/^[\d\s.+\-]+$/.test(trimmed)) return trimmed;
+    const matches = trimmed.match(/[+\-]?\s*\d+(\.\d+)?/g);
+    if (!matches) return trimmed;
+    const sum = matches.reduce((acc, m) => acc + parseFloat(m.replace(/\s/g, "")), 0);
     return String(Math.round(sum * 10000) / 10000);
   };
 
@@ -304,7 +304,7 @@ export default function MeatCountPage() {
                           {product.name}
                         </span>
                       </div>
-                      <div className="flex items-center gap-2 flex-shrink-0">
+                      <div className="flex items-center gap-1 flex-shrink-0">
                         <Input
                           type="text"
                           inputMode="decimal"
@@ -317,7 +317,20 @@ export default function MeatCountPage() {
                           placeholder="0"
                           className="w-20 text-right py-2"
                         />
-                        <span className="text-xs text-zinc-400 w-14">{product.unit}</span>
+                        <button
+                          type="button"
+                          onPointerDown={(e) => {
+                            e.preventDefault();
+                            const cur = (inputs[loc.id]?.[product.id] ?? "").trim();
+                            if (cur.endsWith("+") || cur.endsWith("-")) return;
+                            setCell(loc.id, product.id, (cur || "0") + "+");
+                          }}
+                          className="h-9 w-9 flex items-center justify-center rounded border border-zinc-300 bg-white text-zinc-700 text-base font-semibold active:bg-zinc-100 select-none"
+                          aria-label="Add to total"
+                        >
+                          +
+                        </button>
+                        <span className="text-xs text-zinc-400 w-10 truncate">{product.unit}</span>
                       </div>
                     </div>
                   ))}
