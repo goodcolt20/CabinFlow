@@ -31,6 +31,11 @@ const cmd = isDev
   ? `npx next dev -H ${host} -p ${port}`
   : `npx next start -H ${host} -p ${port}`;
 
+if (!isDev && !existsSync(path.join(root, '.next', 'BUILD_ID'))) {
+  console.log('No production build found. Running next build first...');
+  execSync('npx next build', { stdio: 'inherit', cwd: root });
+}
+
 console.log(`Starting CabinFlow on ${host}:${port} (${isDev ? 'dev' : 'production'})...`);
 
 execSync(cmd, { stdio: 'inherit', cwd: root });
