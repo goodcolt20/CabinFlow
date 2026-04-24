@@ -1,6 +1,6 @@
 import { db } from "@/db";
 import { prepBatches, salesRecords } from "@/db/schema";
-import { and, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
 
 export async function GET(req: NextRequest) {
@@ -64,6 +64,57 @@ export async function POST(req: NextRequest) {
   return NextResponse.json(record, { status: existing ? 200 : 201 });
 }
 
+export async function PATCH(req: NextRequest) {
+  const body = await req.json();
+  const { id, quantitySold, notes } = body;
+
+  if (!id) return NextResponse.json({ error: "id is required" }, { status: 400 });
+
+  const [existing] = await db
+    .select()
+    .from(salesRecords)
+    .where(eq(salesRecords.id, Number(id)))
+    .limit(1);
+
+  if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+  const updates: { quantitySold?: number; notes?: string } = {};
+  if (quantitySold !== undefined) updates.quantitySold = Number(quantitySold);
+  if (notes !== undefined) updates.notes = notes;
+
+  const [record] = await db
+    .update(salesRecords)
+    .set(updates)
+    .where(eq(salesRecords.id, Number(id)))
+    .returning();
+
+  if (quantitySold !== undefined) {
+    const delta = Number(quantitySold) - existing.quantitySold;
+    if (delta > 0) await deductFromBatches(existing.productId, delta);
+    else if (delta < 0) await restoreToBatches(existing.productId, -delta);
+  }
+
+  return NextResponse.json(record);
+}
+
+export async function DELETE(req: NextRequest) {
+  const id = req.nextUrl.searchParams.get("id");
+  if (!id) return NextResponse.json({ error: "id is required" }, { status: 400 });
+
+  const [existing] = await db
+    .select()
+    .from(salesRecords)
+    .where(eq(salesRecords.id, Number(id)))
+    .limit(1);
+
+  if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+  await db.delete(salesRecords).where(eq(salesRecords.id, Number(id)));
+  await restoreToBatches(existing.productId, existing.quantitySold);
+
+  return NextResponse.json({ ok: true });
+}
+
 async function deductFromBatches(productId: number, quantitySold: number) {
   const batches = await db
     .select()
@@ -81,5 +132,27 @@ async function deductFromBatches(productId: number, quantitySold: number) {
       .set({ quantityRemaining: newQty, status: newQty <= 0 ? "depleted" : "active" })
       .where(eq(prepBatches.id, batch.id));
     remaining -= deduct;
+  }
+}
+
+async function restoreToBatches(productId: number, quantity: number) {
+  const batches = await db
+    .select()
+    .from(prepBatches)
+    .where(eq(prepBatches.productId, productId))
+    .orderBy(desc(prepBatches.expiryDate), desc(prepBatches.datePrepped));
+
+  let remaining = quantity;
+  for (const batch of batches) {
+    if (remaining <= 0) break;
+    if (batch.status === "expired") continue;
+    const canRestore = batch.quantityPrepped - batch.quantityRemaining;
+    if (canRestore <= 0) continue;
+    const restore = Math.min(canRestore, remaining);
+    await db
+      .update(prepBatches)
+      .set({ quantityRemaining: batch.quantityRemaining + restore, status: "active" })
+      .where(eq(prepBatches.id, batch.id));
+    remaining -= restore;
   }
 }

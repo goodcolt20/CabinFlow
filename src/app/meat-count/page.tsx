@@ -113,7 +113,7 @@ export default function MeatCountPage() {
       for (const [prodIdStr, qty] of Object.entries(row)) {
         if (qty === "" || qty === null || qty === undefined) continue;
         if (!dirty[locId]?.[Number(prodIdStr)]) continue;
-        const n = Number(qty);
+        const n = Number(resolveExpr(qty));
         if (Number.isNaN(n)) continue;
         payloads.push({ locationId: locId, productId: Number(prodIdStr), quantity: n });
       }
@@ -185,7 +185,7 @@ export default function MeatCountPage() {
   for (const locRow of Object.values(inputs)) {
     for (const [prodIdStr, qty] of Object.entries(locRow)) {
       if (qty === "" || qty === null || qty === undefined) continue;
-      const n = Number(qty);
+      const n = Number(resolveExpr(qty));
       if (Number.isNaN(n)) continue;
       const pid = Number(prodIdStr);
       countedByProduct[pid] = (countedByProduct[pid] ?? 0) + n;
@@ -201,6 +201,16 @@ export default function MeatCountPage() {
   summary.sort((a, b) => a.product.name.localeCompare(b.product.name));
 
   const hasDirty = Object.values(dirty).some((row) => Object.values(row).some(Boolean));
+
+  const resolveExpr = (value: string): string => {
+    const trimmed = value.trim();
+    if (!trimmed || !/[+]/.test(trimmed)) return trimmed;
+    if (!/^[\d\s.+]+$/.test(trimmed)) return trimmed;
+    const parts = trimmed.split("+").map((s) => parseFloat(s.trim()));
+    if (parts.some(isNaN)) return trimmed;
+    const sum = parts.reduce((a, b) => a + b, 0);
+    return String(Math.round(sum * 10000) / 10000);
+  };
 
   return (
     <div className="space-y-6 pb-8">
@@ -296,11 +306,14 @@ export default function MeatCountPage() {
                       </div>
                       <div className="flex items-center gap-2 flex-shrink-0">
                         <Input
-                          type="number"
-                          min={0}
-                          step={0.1}
+                          type="text"
+                          inputMode="decimal"
                           value={inputs[loc.id]?.[product.id] ?? ""}
                           onChange={(e) => setCell(loc.id, product.id, e.target.value)}
+                          onBlur={(e) => {
+                            const resolved = resolveExpr(e.target.value);
+                            if (resolved !== e.target.value) setCell(loc.id, product.id, resolved);
+                          }}
                           placeholder="0"
                           className="w-20 text-right py-2"
                         />

@@ -24,6 +24,7 @@ interface SummaryRow {
   prepped: number;
   sold: number;
   diff: number;
+  saleId?: number;
 }
 
 let keyCounter = 0;
@@ -37,6 +38,9 @@ export default function EodPage() {
   ]);
   const [submitting, setSubmitting] = useState(false);
   const [summary, setSummary] = useState<SummaryRow[] | null>(null);
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editingQty, setEditingQty] = useState("");
+  const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
 
   const rowRefs = useRef<Record<number, HTMLSelectElement | null>>({});
   const lastAddedKey = useRef<number | null>(null);
@@ -69,8 +73,10 @@ export default function EodPage() {
       prepMap[product.id] = (prepMap[product.id] ?? 0) + batch.quantityPrepped;
     }
     const soldMap: Record<number, number> = {};
+    const saleIdMap: Record<number, number> = {};
     for (const { sale } of dashRes.todaySales ?? []) {
       soldMap[sale.productId] = (soldMap[sale.productId] ?? 0) + sale.quantitySold;
+      saleIdMap[sale.productId] = sale.id;
     }
 
     const allIds = new Set([...Object.keys(prepMap), ...Object.keys(soldMap)].map(Number));
@@ -84,6 +90,7 @@ export default function EodPage() {
         prepped,
         sold,
         diff: prepped - sold,
+        saleId: saleIdMap[id],
       });
     }
     rows.sort((a, b) => a.product.name.localeCompare(b.product.name));
@@ -132,6 +139,30 @@ export default function EodPage() {
     );
     setQueue([{ key: nextKey(), productId: "", qty: "" }]);
     setSubmitting(false);
+    await loadSummary(products, date);
+  };
+
+  const startEdit = (id: number, currentQty: number) => {
+    setEditingId(id);
+    setEditingQty(String(currentQty));
+    setConfirmDeleteId(null);
+  };
+
+  const saveSaleEdit = async (id: number, qty: string) => {
+    setEditingId(null);
+    const qtyNum = parseFloat(qty);
+    if (isNaN(qtyNum) || qtyNum < 0) return;
+    await fetch("/api/sales", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, quantitySold: qtyNum }),
+    });
+    await loadSummary(products, date);
+  };
+
+  const deleteSale = async (id: number) => {
+    setConfirmDeleteId(null);
+    await fetch(`/api/sales?id=${id}`, { method: "DELETE" });
     await loadSummary(products, date);
   };
 
@@ -227,28 +258,70 @@ export default function EodPage() {
           ) : (
             <Card>
               <CardContent className="p-0">
-                <div className="grid grid-cols-[1fr_64px_64px_64px] gap-2 px-4 py-2 border-b bg-zinc-50">
+                <div className="grid grid-cols-[1fr_64px_80px_64px_auto] gap-2 px-4 py-2 border-b bg-zinc-50">
                   <span className="text-xs font-medium text-zinc-500">Product</span>
                   <span className="text-xs font-medium text-zinc-500 text-right">Prepped</span>
                   <span className="text-xs font-medium text-zinc-500 text-right">Sold</span>
                   <span className="text-xs font-medium text-zinc-500 text-right">Diff</span>
+                  <span />
                 </div>
                 {summary.map((row, idx) => (
                   <div
                     key={row.product.id}
-                    className={`grid grid-cols-[1fr_64px_64px_64px] gap-2 px-4 py-3 items-center text-sm ${idx < summary.length - 1 ? "border-b" : ""}`}
+                    className={`grid grid-cols-[1fr_64px_80px_64px_auto] gap-2 px-4 py-3 items-center text-sm ${idx < summary.length - 1 ? "border-b" : ""}`}
                   >
                     <div>
                       <span className="font-medium text-zinc-900">{row.product.name}</span>
                       <span className="text-xs text-zinc-400 ml-1.5">{row.product.unit}</span>
                     </div>
                     <span className="text-right text-zinc-600">{row.prepped}</span>
-                    <span className="text-right text-zinc-600">{row.sold}</span>
+                    <div className="text-right">
+                      {editingId === row.saleId && row.saleId ? (
+                        <input
+                          type="number"
+                          min={0}
+                          step={0.1}
+                          value={editingQty}
+                          autoFocus
+                          onChange={(e) => setEditingQty(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") saveSaleEdit(row.saleId!, editingQty);
+                            if (e.key === "Escape") setEditingId(null);
+                          }}
+                          onBlur={() => saveSaleEdit(row.saleId!, editingQty)}
+                          className="w-full text-right border rounded px-1 py-0.5 text-sm"
+                        />
+                      ) : (
+                        <button
+                          onClick={() => row.saleId && startEdit(row.saleId, row.sold)}
+                          className={`w-full text-right text-zinc-600 ${row.saleId ? "hover:text-blue-600 cursor-pointer" : ""}`}
+                        >
+                          {row.sold}
+                        </button>
+                      )}
+                    </div>
                     <span className={`text-right font-medium ${
                       row.diff < 0 ? "text-red-600" : row.diff === 0 ? "text-green-600" : "text-zinc-700"
                     }`}>
                       {row.diff > 0 ? `+${row.diff}` : row.diff}
                     </span>
+                    <div className="flex items-center justify-end">
+                      {row.saleId && (
+                        confirmDeleteId === row.saleId ? (
+                          <span className="inline-flex gap-1 items-center text-xs">
+                            <span className="text-zinc-400">Delete?</span>
+                            <button onClick={() => deleteSale(row.saleId!)} className="text-red-500 hover:text-red-700 font-medium">Yes</button>
+                            <button onClick={() => setConfirmDeleteId(null)} className="text-zinc-400 hover:text-zinc-600">No</button>
+                          </span>
+                        ) : (
+                          <button
+                            onClick={() => setConfirmDeleteId(row.saleId!)}
+                            className="text-zinc-300 hover:text-red-400 text-xl leading-none"
+                            aria-label="Delete sale"
+                          >×</button>
+                        )
+                      )}
+                    </div>
                   </div>
                 ))}
               </CardContent>
