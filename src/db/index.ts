@@ -1,9 +1,11 @@
 import Database from "better-sqlite3";
 import { drizzle } from "drizzle-orm/better-sqlite3";
+import { mkdirSync } from "fs";
 import path from "path";
 import * as schema from "./schema";
 
 const DB_PATH = path.join(process.cwd(), "data", "cabinflow.db");
+mkdirSync(path.dirname(DB_PATH), { recursive: true });
 
 // Singleton pattern — reuse connection across hot-reloads in dev
 const globalForDb = globalThis as unknown as { db: ReturnType<typeof drizzle> };
