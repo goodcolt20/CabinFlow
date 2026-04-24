@@ -266,62 +266,72 @@ export default function EodPage() {
                   <span />
                 </div>
                 {summary.map((row, idx) => (
-                  <div
-                    key={row.product.id}
-                    className={`grid grid-cols-[1fr_64px_80px_64px_auto] gap-2 px-4 py-3 items-center text-sm ${idx < summary.length - 1 ? "border-b" : ""}`}
-                  >
-                    <div>
-                      <span className="font-medium text-zinc-900">{row.product.name}</span>
-                      <span className="text-xs text-zinc-400 ml-1.5">{row.product.unit}</span>
-                    </div>
-                    <span className="text-right text-zinc-600">{row.prepped}</span>
-                    <div className="text-right">
-                      {editingId === row.saleId && row.saleId ? (
-                        <input
-                          type="number"
-                          min={0}
-                          step={0.1}
-                          value={editingQty}
-                          autoFocus
-                          onChange={(e) => setEditingQty(e.target.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") saveSaleEdit(row.saleId!, editingQty);
-                            if (e.key === "Escape") setEditingId(null);
-                          }}
-                          onBlur={() => saveSaleEdit(row.saleId!, editingQty)}
-                          className="w-full text-right border rounded px-1 py-0.5 text-sm"
-                        />
-                      ) : (
-                        <button
-                          onClick={() => row.saleId && startEdit(row.saleId, row.sold)}
-                          className={`w-full text-right text-zinc-600 ${row.saleId ? "hover:text-blue-600 cursor-pointer" : ""}`}
-                        >
-                          {row.sold}
-                        </button>
-                      )}
-                    </div>
-                    <span className={`text-right font-medium ${
-                      row.diff < 0 ? "text-red-600" : row.diff === 0 ? "text-green-600" : "text-zinc-700"
-                    }`}>
-                      {row.diff > 0 ? `+${row.diff}` : row.diff}
-                    </span>
-                    <div className="flex items-center justify-end">
-                      {row.saleId && (
-                        confirmDeleteId === row.saleId ? (
-                          <span className="inline-flex gap-1 items-center text-xs">
-                            <span className="text-zinc-400">Delete?</span>
-                            <button onClick={() => deleteSale(row.saleId!)} className="text-red-500 hover:text-red-700 font-medium">Yes</button>
-                            <button onClick={() => setConfirmDeleteId(null)} className="text-zinc-400 hover:text-zinc-600">No</button>
-                          </span>
+                  <div key={row.product.id} className={idx < summary.length - 1 ? "border-b" : ""}>
+                    <div className="grid grid-cols-[1fr_64px_80px_64px_auto] gap-2 px-4 py-3 items-center text-sm">
+                      <div>
+                        <span className="font-medium text-zinc-900">{row.product.name}</span>
+                        <span className="text-xs text-zinc-400 ml-1.5">{row.product.unit}</span>
+                      </div>
+                      <span className="text-right text-zinc-600">{row.prepped}</span>
+                      <div className="text-right">
+                        {editingId === row.saleId && row.saleId ? (
+                          <input
+                            type="number"
+                            min={0}
+                            step={0.1}
+                            value={editingQty}
+                            autoFocus
+                            onChange={(e) => setEditingQty(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") saveSaleEdit(row.saleId!, editingQty);
+                              if (e.key === "Escape") setEditingId(null);
+                            }}
+                            onBlur={() => saveSaleEdit(row.saleId!, editingQty)}
+                            className="w-full text-right border rounded px-1 py-0.5 text-sm"
+                          />
                         ) : (
+                          <button
+                            onClick={() => row.saleId && startEdit(row.saleId, row.sold)}
+                            className={`w-full text-right text-zinc-600 ${row.saleId ? "hover:text-blue-600 cursor-pointer" : ""}`}
+                          >
+                            {row.sold}
+                          </button>
+                        )}
+                      </div>
+                      <span className={`text-right font-medium ${
+                        row.diff < 0 ? "text-red-600" : row.diff === 0 ? "text-green-600" : "text-zinc-700"
+                      }`}>
+                        {row.diff > 0 ? `+${row.diff}` : row.diff}
+                      </span>
+                      <div className="flex items-center justify-end">
+                        {row.saleId && (
                           <button
                             onClick={() => setConfirmDeleteId(row.saleId!)}
                             className="text-zinc-300 hover:text-red-400 text-xl leading-none"
                             aria-label="Delete sale"
                           >×</button>
-                        )
-                      )}
+                        )}
+                      </div>
                     </div>
+                    {confirmDeleteId === row.saleId && row.saleId && (
+                      <div className="flex items-center justify-between gap-3 px-4 py-2 bg-red-50 border-t border-red-100 text-sm">
+                        <span className="text-zinc-500">Delete this sale entry?</span>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => deleteSale(row.saleId!)}
+                            className="px-3 py-1 rounded bg-red-500 text-white text-xs font-medium hover:bg-red-600"
+                          >
+                            Delete
+                          </button>
+                          <button
+                            onClick={() => setConfirmDeleteId(null)}
+                            className="px-3 py-1 rounded bg-zinc-100 text-zinc-600 text-xs font-medium hover:bg-zinc-200"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 ))}
               </CardContent>
