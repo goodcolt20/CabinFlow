@@ -35,12 +35,24 @@ interface SummaryRow {
 let keyCounter = 0;
 function nextKey() { return ++keyCounter; }
 
+const TEMPLATE_KEY = "cabinflow_eod_template";
+
+function loadTemplate(): string[] {
+  if (typeof window === "undefined") return [];
+  try { return JSON.parse(localStorage.getItem(TEMPLATE_KEY) ?? "[]") as string[]; }
+  catch { return []; }
+}
+
+function initQueue(): QueueItem[] {
+  const ids = loadTemplate();
+  if (ids.length === 0) return [{ key: nextKey(), productId: "", qty: "" }];
+  return ids.map((pid) => ({ key: nextKey(), productId: pid, qty: "" }));
+}
+
 export default function EodPage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [date, setDate] = usePersistentDate();
-  const [queue, setQueue] = useState<QueueItem[]>([
-    { key: nextKey(), productId: "", qty: "" },
-  ]);
+  const [queue, setQueue] = useState<QueueItem[]>(initQueue);
   const [submitting, setSubmitting] = useState(false);
   const [summary, setSummary] = useState<SummaryRow[] | null>(null);
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -53,6 +65,12 @@ export default function EodPage() {
   useEffect(() => {
     fetch("/api/products").then((r) => r.json()).then(setProducts);
   }, []);
+
+  // Persist queue product selections as template
+  useEffect(() => {
+    const ids = queue.filter((r) => r.productId).map((r) => r.productId);
+    try { localStorage.setItem(TEMPLATE_KEY, JSON.stringify(ids)); } catch { /* ignore */ }
+  }, [queue]);
 
   // Re-fetch summary whenever date or products change
   useEffect(() => {
@@ -126,11 +144,21 @@ export default function EodPage() {
   };
 
   const removeRow = (key: number) => {
-    setQueue((prev) =>
-      prev.length === 1
-        ? [{ key: nextKey(), productId: "", qty: "" }]
-        : prev.filter((r) => r.key !== key)
-    );
+    setQueue((prev) => {
+      const next = prev.filter((r) => r.key !== key);
+      return next.length === 0 ? [{ key: nextKey(), productId: "", qty: "" }] : next;
+    });
+  };
+
+  const moveQueueRow = (key: number, direction: -1 | 1) => {
+    setQueue((prev) => {
+      const idx = prev.findIndex((r) => r.key === key);
+      const target = idx + direction;
+      if (idx < 0 || target < 0 || target >= prev.length) return prev;
+      const next = [...prev];
+      [next[idx], next[target]] = [next[target], next[idx]];
+      return next;
+    });
   };
 
   const handleEnter = (e: React.KeyboardEvent) => {
@@ -155,7 +183,7 @@ export default function EodPage() {
         })
       )
     );
-    setQueue([{ key: nextKey(), productId: "", qty: "" }]);
+    setQueue((prev) => prev.map((r) => ({ ...r, qty: "" })));
     setSubmitting(false);
     await loadSummary(products, date);
   };
@@ -208,15 +236,33 @@ export default function EodPage() {
       <div className="space-y-2">
         <p className="text-xs text-zinc-500 uppercase tracking-wide font-medium">Sales Entry</p>
 
-        <div className="grid grid-cols-[1fr_100px_28px] gap-2 px-0.5">
+        <div className="grid grid-cols-[20px_1fr_100px_28px] gap-2 px-0.5">
+          <span />
           <span className="text-xs text-zinc-400">Product</span>
           <span className="text-xs text-zinc-400">Qty sold</span>
           <span />
         </div>
 
         <div className="space-y-2">
-          {queue.map((row) => (
-            <div key={row.key} className="grid grid-cols-[1fr_100px_28px] gap-2 items-center">
+          {queue.map((row, idx) => (
+            <div key={row.key} className="grid grid-cols-[20px_1fr_100px_28px] gap-2 items-center">
+              <div className="flex flex-col">
+                <button
+                  type="button"
+                  onClick={() => moveQueueRow(row.key, -1)}
+                  disabled={idx === 0}
+                  aria-label="Move up"
+                  className="h-[18px] flex items-center justify-center text-zinc-300 hover:text-zinc-600 disabled:opacity-20 disabled:cursor-not-allowed text-xs"
+                >↑</button>
+                <button
+                  type="button"
+                  onClick={() => moveQueueRow(row.key, 1)}
+                  disabled={idx === queue.length - 1}
+                  aria-label="Move down"
+                  className="h-[18px] flex items-center justify-center text-zinc-300 hover:text-zinc-600 disabled:opacity-20 disabled:cursor-not-allowed text-xs"
+                >↓</button>
+              </div>
+
               <select
                 ref={(el) => { rowRefs.current[row.key] = el; }}
                 value={row.productId}

@@ -33,10 +33,17 @@ interface CountRow {
 }
 
 
+const PRODUCT_ORDER_KEY = "cabinflow_meatcount_order";
+
 export default function MeatCountPage() {
   const [date, setDate] = useState(todayLocal);
   const [products, setProducts] = useState<Product[]>([]);
   const [locs, setLocs] = useState<Location[]>([]);
+  const [productOrder, setProductOrder] = useState<number[]>(() => {
+    if (typeof window === "undefined") return [];
+    try { return JSON.parse(localStorage.getItem(PRODUCT_ORDER_KEY) ?? "[]") as number[]; }
+    catch { return []; }
+  });
   // Nested map: inputs[locationId][productId] = quantity string
   const [inputs, setInputs] = useState<Record<number, Record<number, string>>>({});
 
@@ -152,11 +159,31 @@ export default function MeatCountPage() {
     await loadAll(date);
   };
 
-  // Group products by category for consistent ordering within cards
-  const sortedProducts = [...products].sort((a, b) => {
-    if (a.category !== b.category) return a.category.localeCompare(b.category);
-    return a.name.localeCompare(b.name);
-  });
+  const sortedProducts = (() => {
+    if (productOrder.length === 0) {
+      return [...products].sort((a, b) => {
+        if (a.category !== b.category) return a.category.localeCompare(b.category);
+        return a.name.localeCompare(b.name);
+      });
+    }
+    const orderMap = new Map(productOrder.map((id, idx) => [id, idx]));
+    return [...products].sort((a, b) => {
+      const aIdx = orderMap.get(a.id) ?? Infinity;
+      const bIdx = orderMap.get(b.id) ?? Infinity;
+      if (aIdx !== bIdx) return aIdx - bIdx;
+      return a.name.localeCompare(b.name);
+    });
+  })();
+
+  const moveProduct = (id: number, direction: -1 | 1) => {
+    const ids = sortedProducts.map((p) => p.id);
+    const idx = ids.indexOf(id);
+    const target = idx + direction;
+    if (idx < 0 || target < 0 || target >= ids.length) return;
+    [ids[idx], ids[target]] = [ids[target], ids[idx]];
+    setProductOrder(ids);
+    localStorage.setItem(PRODUCT_ORDER_KEY, JSON.stringify(ids));
+  };
 
   const resolveExpr = (value: string): string => {
     const trimmed = value.trim();
@@ -268,6 +295,7 @@ export default function MeatCountPage() {
                           inputMode="decimal"
                           value={inputs[loc.id]?.[product.id] ?? ""}
                           onChange={(e) => setCell(loc.id, product.id, e.target.value)}
+                          onFocus={(e) => e.target.select()}
                           onBlur={(e) => {
                             const resolved = resolveExpr(e.target.value);
                             if (resolved !== e.target.value) setCell(loc.id, product.id, resolved);
@@ -303,6 +331,42 @@ export default function MeatCountPage() {
               {saving ? "Saving..." : hasDirty ? "Save All" : "Saved"}
             </Button>
           </div>
+
+          {/* Product Order */}
+          {sortedProducts.length > 1 && (
+            <div className="space-y-2">
+              <p className="text-xs text-zinc-500 uppercase tracking-wide font-medium">Product Order</p>
+              <Card>
+                <CardContent className="p-0">
+                  {sortedProducts.map((product, idx) => (
+                    <div
+                      key={product.id}
+                      className={`flex items-center gap-2 px-4 py-2.5 ${idx < sortedProducts.length - 1 ? "border-b" : ""}`}
+                    >
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => moveProduct(product.id, -1)}
+                          disabled={idx === 0}
+                          aria-label="Move up"
+                          className="h-7 w-7 flex items-center justify-center rounded text-zinc-400 hover:text-zinc-700 hover:bg-zinc-100 disabled:opacity-30 disabled:cursor-not-allowed"
+                        >↑</button>
+                        <button
+                          type="button"
+                          onClick={() => moveProduct(product.id, 1)}
+                          disabled={idx === sortedProducts.length - 1}
+                          aria-label="Move down"
+                          className="h-7 w-7 flex items-center justify-center rounded text-zinc-400 hover:text-zinc-700 hover:bg-zinc-100 disabled:opacity-30 disabled:cursor-not-allowed"
+                        >↓</button>
+                      </div>
+                      <span className="flex-1 text-sm font-medium text-zinc-900">{product.name}</span>
+                      <span className="text-xs text-zinc-400">{product.unit}</span>
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
+            </div>
+          )}
 
         </>
       )}
