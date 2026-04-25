@@ -55,6 +55,7 @@ export default function EodPage() {
   const [queue, setQueue] = useState<QueueItem[]>(initQueue);
   const [submitting, setSubmitting] = useState(false);
   const [summary, setSummary] = useState<SummaryRow[] | null>(null);
+  const [editingSummary, setEditingSummary] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editingQty, setEditingQty] = useState("");
   const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
@@ -314,15 +315,26 @@ export default function EodPage() {
       {/* EOD Summary */}
       {summary !== null && (
         <div className="space-y-2">
-          <p className="text-xs text-zinc-500 uppercase tracking-wide font-medium">
-            Day Summary — {date}
-          </p>
+          <div className="flex items-center justify-between">
+            <p className="text-xs text-zinc-500 uppercase tracking-wide font-medium">
+              Day Summary — {date}
+            </p>
+            {summary.length > 0 && (
+              <button
+                onClick={() => { setEditingSummary((v) => !v); setConfirmDeleteId(null); }}
+                className="text-xs text-zinc-400 hover:text-zinc-700 font-medium"
+              >
+                {editingSummary ? "Done" : "Edit"}
+              </button>
+            )}
+          </div>
           {summary.length === 0 ? (
             <p className="text-sm text-zinc-400">No prep, sales, or counts recorded for this date yet.</p>
           ) : (
             <Card>
               <CardContent className="p-0">
-                <div className="grid grid-cols-[1fr_44px_52px_44px_52px] sm:grid-cols-[1fr_56px_72px_56px_64px] gap-1 sm:gap-2 px-2 sm:px-4 py-2 border-b bg-zinc-50">
+                {/* Header */}
+                <div className="grid grid-cols-[1fr_52px_52px_52px_60px] sm:grid-cols-[1fr_60px_72px_60px_68px] gap-1 sm:gap-2 px-2 sm:px-4 py-2 border-b bg-zinc-50">
                   <span className="text-xs font-medium text-zinc-500">Product</span>
                   <span className="text-xs font-medium text-zinc-500 text-right">Prep</span>
                   <span className="text-xs font-medium text-zinc-500 text-right">Sold</span>
@@ -331,20 +343,22 @@ export default function EodPage() {
                 </div>
                 {summary.map((row, idx) => (
                   <div key={row.product.id} className={idx < summary.length - 1 ? "border-b" : ""}>
-                    <div className="grid grid-cols-[1fr_44px_52px_44px_52px] sm:grid-cols-[1fr_56px_72px_56px_64px] gap-1 sm:gap-2 px-2 sm:px-4 py-3 items-center text-sm">
-                      <div className="flex items-center gap-1 min-w-0">
-                        <div className="min-w-0 flex-1">
-                          <span className="font-medium text-zinc-900 truncate block">{row.product.name}</span>
-                          <span className="text-xs text-zinc-400">{row.product.unit}</span>
-                        </div>
-                        {row.saleId && (
-                          <button
-                            onClick={() => setConfirmDeleteId(row.saleId!)}
-                            className="text-zinc-300 hover:text-red-400 text-xl leading-none flex-shrink-0"
-                            aria-label="Delete sale"
-                          >×</button>
-                        )}
-                      </div>
+                    {/* Name row */}
+                    <div className="flex items-start justify-between gap-2 px-2 sm:px-4 pt-3 pb-0.5">
+                      <span className="font-medium text-zinc-900 text-sm max-w-[75%] sm:max-w-[65%]">
+                        {row.product.name}
+                      </span>
+                      {editingSummary && row.saleId && (
+                        <button
+                          onClick={() => setConfirmDeleteId(row.saleId!)}
+                          className="text-zinc-300 hover:text-red-400 text-xl leading-none flex-shrink-0 mt-0.5"
+                          aria-label="Delete sale"
+                        >×</button>
+                      )}
+                    </div>
+                    {/* Numbers row — same grid as header */}
+                    <div className="grid grid-cols-[1fr_52px_52px_52px_60px] sm:grid-cols-[1fr_60px_72px_60px_68px] gap-1 sm:gap-2 px-2 sm:px-4 pb-3 items-center text-sm">
+                      <span className="text-xs text-zinc-400">{row.product.unit}</span>
                       <span className="text-right text-zinc-600">{row.prepped}</span>
                       <div className="text-right">
                         {editingId === row.saleId && row.saleId ? (
@@ -385,15 +399,11 @@ export default function EodPage() {
                           <button
                             onClick={() => deleteSale(row.saleId!)}
                             className="px-3 py-1 rounded bg-red-500 text-white text-xs font-medium hover:bg-red-600"
-                          >
-                            Delete
-                          </button>
+                          >Delete</button>
                           <button
                             onClick={() => setConfirmDeleteId(null)}
                             className="px-3 py-1 rounded bg-zinc-100 text-zinc-600 text-xs font-medium hover:bg-zinc-200"
-                          >
-                            Cancel
-                          </button>
+                          >Cancel</button>
                         </div>
                       </div>
                     )}
