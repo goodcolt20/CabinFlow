@@ -322,20 +322,28 @@ export default function EodPage() {
           ) : (
             <Card>
               <CardContent className="p-0">
-                <div className="grid grid-cols-[1fr_64px_80px_64px_72px_auto] gap-2 px-4 py-2 border-b bg-zinc-50">
+                <div className="grid grid-cols-[1fr_44px_52px_44px_52px] sm:grid-cols-[1fr_56px_72px_56px_64px] gap-1 sm:gap-2 px-2 sm:px-4 py-2 border-b bg-zinc-50">
                   <span className="text-xs font-medium text-zinc-500">Product</span>
-                  <span className="text-xs font-medium text-zinc-500 text-right">Prepped</span>
+                  <span className="text-xs font-medium text-zinc-500 text-right">Prep</span>
                   <span className="text-xs font-medium text-zinc-500 text-right">Sold</span>
-                  <span className="text-xs font-medium text-zinc-500 text-right">Counted</span>
-                  <span className="text-xs font-medium text-zinc-500 text-right">Variance</span>
-                  <span />
+                  <span className="text-xs font-medium text-zinc-500 text-right">Count</span>
+                  <span className="text-xs font-medium text-zinc-500 text-right">Var</span>
                 </div>
                 {summary.map((row, idx) => (
                   <div key={row.product.id} className={idx < summary.length - 1 ? "border-b" : ""}>
-                    <div className="grid grid-cols-[1fr_64px_80px_64px_72px_auto] gap-2 px-4 py-3 items-center text-sm">
-                      <div>
-                        <span className="font-medium text-zinc-900">{row.product.name}</span>
-                        <span className="text-xs text-zinc-400 ml-1.5">{row.product.unit}</span>
+                    <div className="grid grid-cols-[1fr_44px_52px_44px_52px] sm:grid-cols-[1fr_56px_72px_56px_64px] gap-1 sm:gap-2 px-2 sm:px-4 py-3 items-center text-sm">
+                      <div className="flex items-center gap-1 min-w-0">
+                        <div className="min-w-0 flex-1">
+                          <span className="font-medium text-zinc-900 truncate block">{row.product.name}</span>
+                          <span className="text-xs text-zinc-400">{row.product.unit}</span>
+                        </div>
+                        {row.saleId && (
+                          <button
+                            onClick={() => setConfirmDeleteId(row.saleId!)}
+                            className="text-zinc-300 hover:text-red-400 text-xl leading-none flex-shrink-0"
+                            aria-label="Delete sale"
+                          >×</button>
+                        )}
                       </div>
                       <span className="text-right text-zinc-600">{row.prepped}</span>
                       <div className="text-right">
@@ -369,18 +377,9 @@ export default function EodPage() {
                       }`}>
                         {row.variance > 0 ? `+${row.variance}` : row.variance}
                       </span>
-                      <div className="flex items-center justify-end">
-                        {row.saleId && (
-                          <button
-                            onClick={() => setConfirmDeleteId(row.saleId!)}
-                            className="text-zinc-300 hover:text-red-400 text-xl leading-none"
-                            aria-label="Delete sale"
-                          >×</button>
-                        )}
-                      </div>
                     </div>
                     {confirmDeleteId === row.saleId && row.saleId && (
-                      <div className="flex items-center justify-between gap-3 px-4 py-2 bg-red-50 border-t border-red-100 text-sm">
+                      <div className="flex items-center justify-between gap-3 px-2 sm:px-4 py-2 bg-red-50 border-t border-red-100 text-sm">
                         <span className="text-zinc-500">Delete this sale entry?</span>
                         <div className="flex gap-2">
                           <button
