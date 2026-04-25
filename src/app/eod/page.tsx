@@ -19,11 +19,16 @@ interface QueueItem {
   qty: string;
 }
 
+interface CountRow {
+  count: { productId: number; quantity: number };
+}
+
 interface SummaryRow {
   product: Product;
   prepped: number;
   sold: number;
-  diff: number;
+  counted: number;
+  variance: number;
   saleId?: number;
 }
 
@@ -63,7 +68,10 @@ export default function EodPage() {
   }, [queue]);
 
   const loadSummary = async (productList: Product[], forDate: string) => {
-    const dashRes = await fetch(`/api/dashboard?date=${forDate}`).then((r) => r.json());
+    const [dashRes, countRows] = await Promise.all([
+      fetch(`/api/dashboard?date=${forDate}`).then((r) => r.json()),
+      fetch(`/api/counts?date=${forDate}`).then((r) => r.json()) as Promise<CountRow[]>,
+    ]);
 
     const productMap: Record<number, Product> = {};
     for (const p of productList) productMap[p.id] = p;
@@ -78,18 +86,28 @@ export default function EodPage() {
       soldMap[sale.productId] = (soldMap[sale.productId] ?? 0) + sale.quantitySold;
       saleIdMap[sale.productId] = sale.id;
     }
+    const countedMap: Record<number, number> = {};
+    for (const { count } of countRows ?? []) {
+      countedMap[count.productId] = (countedMap[count.productId] ?? 0) + count.quantity;
+    }
 
-    const allIds = new Set([...Object.keys(prepMap), ...Object.keys(soldMap)].map(Number));
+    const allIds = new Set([
+      ...Object.keys(prepMap),
+      ...Object.keys(soldMap),
+      ...Object.keys(countedMap),
+    ].map(Number));
     const rows: SummaryRow[] = [];
     for (const id of allIds) {
       if (!productMap[id]) continue;
       const prepped = prepMap[id] ?? 0;
       const sold = soldMap[id] ?? 0;
+      const counted = countedMap[id] ?? 0;
       rows.push({
         product: productMap[id],
         prepped,
         sold,
-        diff: prepped - sold,
+        counted,
+        variance: counted - (prepped - sold),
         saleId: saleIdMap[id],
       });
     }
@@ -254,20 +272,21 @@ export default function EodPage() {
             Day Summary — {date}
           </p>
           {summary.length === 0 ? (
-            <p className="text-sm text-zinc-400">No prep or sales recorded for this date yet.</p>
+            <p className="text-sm text-zinc-400">No prep, sales, or counts recorded for this date yet.</p>
           ) : (
             <Card>
               <CardContent className="p-0">
-                <div className="grid grid-cols-[1fr_64px_80px_64px_auto] gap-2 px-4 py-2 border-b bg-zinc-50">
+                <div className="grid grid-cols-[1fr_64px_80px_64px_72px_auto] gap-2 px-4 py-2 border-b bg-zinc-50">
                   <span className="text-xs font-medium text-zinc-500">Product</span>
                   <span className="text-xs font-medium text-zinc-500 text-right">Prepped</span>
                   <span className="text-xs font-medium text-zinc-500 text-right">Sold</span>
-                  <span className="text-xs font-medium text-zinc-500 text-right">Diff</span>
+                  <span className="text-xs font-medium text-zinc-500 text-right">Counted</span>
+                  <span className="text-xs font-medium text-zinc-500 text-right">Variance</span>
                   <span />
                 </div>
                 {summary.map((row, idx) => (
                   <div key={row.product.id} className={idx < summary.length - 1 ? "border-b" : ""}>
-                    <div className="grid grid-cols-[1fr_64px_80px_64px_auto] gap-2 px-4 py-3 items-center text-sm">
+                    <div className="grid grid-cols-[1fr_64px_80px_64px_72px_auto] gap-2 px-4 py-3 items-center text-sm">
                       <div>
                         <span className="font-medium text-zinc-900">{row.product.name}</span>
                         <span className="text-xs text-zinc-400 ml-1.5">{row.product.unit}</span>
@@ -298,10 +317,11 @@ export default function EodPage() {
                           </button>
                         )}
                       </div>
+                      <span className="text-right text-zinc-600">{row.counted}</span>
                       <span className={`text-right font-medium ${
-                        row.diff < 0 ? "text-red-600" : row.diff === 0 ? "text-green-600" : "text-zinc-700"
+                        row.variance < 0 ? "text-red-600" : row.variance === 0 ? "text-green-600" : "text-amber-600"
                       }`}>
-                        {row.diff > 0 ? `+${row.diff}` : row.diff}
+                        {row.variance > 0 ? `+${row.variance}` : row.variance}
                       </span>
                       <div className="flex items-center justify-end">
                         {row.saleId && (

@@ -32,24 +32,11 @@ interface CountRow {
   location: Location;
 }
 
-interface StockLevel {
-  product: { id: number };
-  totalRemaining: number | null;
-}
-
-interface SummaryRow {
-  product: Product;
-  counted: number;
-  system: number;
-  variance: number;
-}
 
 export default function MeatCountPage() {
   const [date, setDate] = useState(todayLocal);
   const [products, setProducts] = useState<Product[]>([]);
   const [locs, setLocs] = useState<Location[]>([]);
-  const [stockMap, setStockMap] = useState<Record<number, number>>({});
-
   // Nested map: inputs[locationId][productId] = quantity string
   const [inputs, setInputs] = useState<Record<number, Record<number, string>>>({});
 
@@ -65,22 +52,14 @@ export default function MeatCountPage() {
   const [addError, setAddError] = useState<string | null>(null);
 
   const loadAll = async (forDate: string) => {
-    const [prods, locations, countRows, dash] = await Promise.all([
+    const [prods, locations, countRows] = await Promise.all([
       fetch("/api/products").then((r) => r.json()) as Promise<Product[]>,
       fetch("/api/locations").then((r) => r.json()) as Promise<Location[]>,
       fetch(`/api/counts?date=${forDate}`).then((r) => r.json()) as Promise<CountRow[]>,
-      fetch(`/api/dashboard?date=${forDate}`).then((r) => r.json()),
     ]);
 
     setProducts(prods);
     setLocs(locations);
-
-    // Stock levels
-    const stock: Record<number, number> = {};
-    for (const { product, totalRemaining } of (dash.stockLevels ?? []) as StockLevel[]) {
-      stock[product.id] = totalRemaining ?? 0;
-    }
-    setStockMap(stock);
 
     // Pre-fill inputs from existing counts
     const next: Record<number, Record<number, string>> = {};
@@ -188,27 +167,6 @@ export default function MeatCountPage() {
     const sum = matches.reduce((acc, m) => acc + parseFloat(m.replace(/\s/g, "")), 0);
     return String(Math.round(sum * 10000) / 10000);
   };
-
-  // Build summary: sum counted per product, compare against system stock
-  const summary: SummaryRow[] = [];
-  const countedByProduct: Record<number, number> = {};
-  for (const locRow of Object.values(inputs)) {
-    for (const [prodIdStr, qty] of Object.entries(locRow)) {
-      if (qty === "" || qty === null || qty === undefined) continue;
-      const n = Number(resolveExpr(qty));
-      if (Number.isNaN(n)) continue;
-      const pid = Number(prodIdStr);
-      countedByProduct[pid] = (countedByProduct[pid] ?? 0) + n;
-    }
-  }
-  for (const pid of Object.keys(countedByProduct).map(Number)) {
-    const product = products.find((p) => p.id === pid);
-    if (!product) continue;
-    const counted = countedByProduct[pid];
-    const system = stockMap[pid] ?? 0;
-    summary.push({ product, counted, system, variance: counted - system });
-  }
-  summary.sort((a, b) => a.product.name.localeCompare(b.product.name));
 
   const hasDirty = Object.values(dirty).some((row) => Object.values(row).some(Boolean));
 
@@ -346,48 +304,6 @@ export default function MeatCountPage() {
             </Button>
           </div>
 
-          {/* Summary */}
-          <div className="space-y-2">
-            <p className="text-xs text-zinc-500 uppercase tracking-wide font-medium">
-              Summary — {date}
-            </p>
-            {summary.length === 0 ? (
-              <p className="text-sm text-zinc-400">No counts recorded for this date yet.</p>
-            ) : (
-              <Card>
-                <CardContent className="p-0">
-                  <div className="grid grid-cols-[1fr_64px_64px_64px] gap-2 px-4 py-2 border-b bg-zinc-50">
-                    <span className="text-xs font-medium text-zinc-500">Product</span>
-                    <span className="text-xs font-medium text-zinc-500 text-right">Counted</span>
-                    <span className="text-xs font-medium text-zinc-500 text-right">System</span>
-                    <span className="text-xs font-medium text-zinc-500 text-right">Variance</span>
-                  </div>
-                  {summary.map((row, idx) => (
-                    <div
-                      key={row.product.id}
-                      className={`grid grid-cols-[1fr_64px_64px_64px] gap-2 px-4 py-3 items-center text-sm ${idx < summary.length - 1 ? "border-b" : ""}`}
-                    >
-                      <div>
-                        <span className="font-medium text-zinc-900">{row.product.name}</span>
-                        <span className="text-xs text-zinc-400 ml-1.5">{row.product.unit}</span>
-                      </div>
-                      <span className="text-right text-zinc-700">{row.counted}</span>
-                      <span className="text-right text-zinc-500">{row.system}</span>
-                      <span className={`text-right font-medium ${
-                        row.variance < 0
-                          ? "text-red-600"
-                          : row.variance === 0
-                          ? "text-green-600"
-                          : "text-amber-600"
-                      }`}>
-                        {row.variance > 0 ? `+${row.variance}` : row.variance}
-                      </span>
-                    </div>
-                  ))}
-                </CardContent>
-              </Card>
-            )}
-          </div>
         </>
       )}
     </div>
