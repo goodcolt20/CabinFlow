@@ -339,7 +339,7 @@ export default function EodPage() {
                   <span className="text-xs font-medium text-zinc-500 text-right">Prep</span>
                   <span className="text-xs font-medium text-zinc-500 text-right">Sold</span>
                   <span className="text-xs font-medium text-zinc-500 text-right">Count</span>
-                  <span className="text-xs font-medium text-zinc-500 text-right">Var</span>
+                  <span className="text-xs font-medium text-zinc-500 text-right">Variance</span>
                 </div>
                 {summary.map((row, idx) => (
                   <div key={row.product.id} className={idx < summary.length - 1 ? "border-b" : ""}>
