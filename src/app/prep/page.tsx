@@ -6,7 +6,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { daysUntil, todayLocal } from "@/lib/dates";
+import { daysUntil } from "@/lib/dates";
+import { usePersistentDate } from "@/lib/usePersistentDate";
 import { useEffect, useRef, useState } from "react";
 
 interface Product {
@@ -51,7 +52,7 @@ function nextKey() { return ++keyCounter; }
 export default function PrepPage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [activeBatches, setActiveBatches] = useState<{ batch: Batch; product: Product }[]>([]);
-  const [date, setDate] = useState(todayLocal);
+  const [date, setDate] = usePersistentDate();
 
   const [queue, setQueue] = useState<QueueItem[]>([
     { key: nextKey(), productId: "", qty: "", shelfLife: "", notes: "" },
