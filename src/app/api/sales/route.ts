@@ -44,6 +44,9 @@ export async function POST(req: NextRequest) {
       .set({ quantitySold: Number(quantitySold), notes })
       .where(eq(salesRecords.id, existing.id))
       .returning();
+    const delta = Number(quantitySold) - existing.quantitySold;
+    if (delta > 0) await deductFromBatches(Number(productId), delta);
+    else if (delta < 0) await restoreToBatches(Number(productId), -delta);
   } else {
     [record] = await db
       .insert(salesRecords)
@@ -56,10 +59,8 @@ export async function POST(req: NextRequest) {
         notes,
       })
       .returning();
+    await deductFromBatches(Number(productId), Number(quantitySold));
   }
-
-  // Deduct from oldest active batches (FIFO)
-  await deductFromBatches(Number(productId), Number(quantitySold));
 
   return NextResponse.json(record, { status: existing ? 200 : 201 });
 }
