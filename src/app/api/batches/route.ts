@@ -56,7 +56,36 @@ export async function POST(req: NextRequest) {
   return NextResponse.json(row, { status: 201 });
 }
 
-export async function PATCH() {
+export async function PATCH(req: NextRequest) {
+  let body: Record<string, unknown> | null = null;
+  try { body = await req.json(); } catch { /* no body — expire-marking path */ }
+
+  // If body carries id + quantityPrepped, update that specific batch
+  if (body?.id !== undefined && body?.quantityPrepped !== undefined) {
+    const id = Number(body.id);
+    const newQty = Number(body.quantityPrepped);
+
+    const [existing] = await db.select().from(prepBatches).where(eq(prepBatches.id, id)).limit(1);
+    if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+    const alreadySold = existing.quantityPrepped - existing.quantityRemaining;
+    if (newQty < alreadySold) {
+      return NextResponse.json(
+        { error: `Cannot reduce below quantity already sold (${alreadySold})` },
+        { status: 400 }
+      );
+    }
+
+    const [updated] = await db
+      .update(prepBatches)
+      .set({ quantityPrepped: newQty, quantityRemaining: existing.quantityRemaining + (newQty - existing.quantityPrepped) })
+      .where(eq(prepBatches.id, id))
+      .returning();
+
+    return NextResponse.json(updated);
+  }
+
+  // Default: mark active batches whose expiry has passed
   const today = todayLocal();
 
   const expired = await db

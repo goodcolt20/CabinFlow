@@ -70,6 +70,11 @@ export default function PrepPage() {
   const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
   const [deletingBatch, setDeletingBatch] = useState(false);
 
+  // Inline batch quantity editing
+  const [editingBatchId, setEditingBatchId] = useState<number | null>(null);
+  const [editingBatchQty, setEditingBatchQty] = useState("");
+  const [editBatchError, setEditBatchError] = useState<string | null>(null);
+
   // Ref map for focusing newly added rows
   const rowRefs = useRef<Record<number, HTMLSelectElement | null>>({});
   const lastAddedKey = useRef<number | null>(null);
@@ -161,6 +166,31 @@ export default function PrepPage() {
     await fetch(`/api/batches?id=${id}`, { method: "DELETE" });
     setDeletingBatch(false);
     setConfirmDeleteId(null);
+    loadData();
+  };
+
+  const startEditBatch = (batch: Batch) => {
+    setConfirmDeleteId(null);
+    setEditBatchError(null);
+    setEditingBatchId(batch.id);
+    setEditingBatchQty(String(batch.quantityPrepped));
+  };
+
+  const saveBatchEdit = async (batch: Batch) => {
+    const qty = parseFloat(editingBatchQty);
+    if (isNaN(qty) || qty < 0) return;
+    setEditBatchError(null);
+    const res = await fetch("/api/batches", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: batch.id, quantityPrepped: qty }),
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({ error: "Failed to save" }));
+      setEditBatchError(body.error ?? "Failed to save");
+      return;
+    }
+    setEditingBatchId(null);
     loadData();
   };
 
@@ -359,52 +389,69 @@ export default function PrepPage() {
                     <CardContent className="p-0">
                       {sorted.map((batch, idx) => {
                         const isConfirming = confirmDeleteId === batch.id;
+                        const isEditing = editingBatchId === batch.id;
                         return (
-                          <div
-                            key={batch.id}
-                            className={`flex items-center justify-between gap-3 px-4 py-2.5 text-sm ${idx < sorted.length - 1 ? "border-b" : ""}`}
-                          >
-                            <div className="text-zinc-500 min-w-0 flex-1 truncate">
-                              Prepped {batch.datePrepped}
-                              {batch.notes && <span className="text-zinc-400 ml-1.5">· {batch.notes}</span>}
+                          <div key={batch.id} className={idx < sorted.length - 1 ? "border-b" : ""}>
+                            <div className="flex items-center justify-between gap-3 px-4 py-2.5 text-sm">
+                              <div className="text-zinc-500 min-w-0 flex-1 truncate">
+                                Prepped {batch.datePrepped}
+                                {batch.notes && <span className="text-zinc-400 ml-1.5">· {batch.notes}</span>}
+                              </div>
+                              {isEditing ? (
+                                <div className="flex items-center gap-1.5 flex-shrink-0">
+                                  <input
+                                    type="number"
+                                    min={0}
+                                    step={0.1}
+                                    value={editingBatchQty}
+                                    autoFocus
+                                    onChange={(e) => setEditingBatchQty(e.target.value)}
+                                    onKeyDown={(e) => {
+                                      if (e.key === "Enter") saveBatchEdit(batch);
+                                      if (e.key === "Escape") setEditingBatchId(null);
+                                    }}
+                                    className="w-16 text-right border rounded px-1 py-0.5 text-sm"
+                                  />
+                                  <span className="text-xs text-zinc-400">{product.unit}</span>
+                                  <Button size="sm" onClick={() => saveBatchEdit(batch)} className="h-7 px-2 text-xs">Save</Button>
+                                  <Button size="sm" variant="outline" onClick={() => setEditingBatchId(null)} className="h-7 px-2 text-xs">Cancel</Button>
+                                </div>
+                              ) : isConfirming ? (
+                                <div className="flex items-center gap-1.5 flex-shrink-0">
+                                  <span className="text-xs text-zinc-500 mr-1">Delete?</span>
+                                  <Button size="sm" variant="destructive" onClick={() => deleteBatch(batch.id)} disabled={deletingBatch} className="h-7 px-2 text-xs">
+                                    {deletingBatch ? "..." : "Yes"}
+                                  </Button>
+                                  <Button size="sm" variant="outline" onClick={() => setConfirmDeleteId(null)} className="h-7 px-2 text-xs">No</Button>
+                                </div>
+                              ) : (
+                                <div className="flex items-center gap-2 flex-shrink-0">
+                                  <span className="text-zinc-700">
+                                    {batch.quantityRemaining}
+                                    <span className="text-zinc-400 text-xs ml-1">{product.unit}</span>
+                                  </span>
+                                  <ShelfBadge expiryDate={batch.expiryDate} asOf={date} />
+                                  <button
+                                    type="button"
+                                    onClick={() => startEditBatch(batch)}
+                                    aria-label="Edit batch"
+                                    className="text-zinc-300 hover:text-blue-500 text-xs font-medium h-7 px-1 flex items-center"
+                                  >
+                                    Edit
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => setConfirmDeleteId(batch.id)}
+                                    aria-label="Delete batch"
+                                    className="text-zinc-300 hover:text-red-500 text-lg leading-none h-7 w-7 flex items-center justify-center"
+                                  >
+                                    ×
+                                  </button>
+                                </div>
+                              )}
                             </div>
-                            {isConfirming ? (
-                              <div className="flex items-center gap-1.5 flex-shrink-0">
-                                <span className="text-xs text-zinc-500 mr-1">Delete?</span>
-                                <Button
-                                  size="sm"
-                                  variant="destructive"
-                                  onClick={() => deleteBatch(batch.id)}
-                                  disabled={deletingBatch}
-                                  className="h-7 px-2 text-xs"
-                                >
-                                  {deletingBatch ? "..." : "Yes"}
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={() => setConfirmDeleteId(null)}
-                                  className="h-7 px-2 text-xs"
-                                >
-                                  No
-                                </Button>
-                              </div>
-                            ) : (
-                              <div className="flex items-center gap-2 flex-shrink-0">
-                                <span className="text-zinc-700">
-                                  {batch.quantityRemaining}
-                                  <span className="text-zinc-400 text-xs ml-1">{product.unit}</span>
-                                </span>
-                                <ShelfBadge expiryDate={batch.expiryDate} asOf={date} />
-                                <button
-                                  type="button"
-                                  onClick={() => setConfirmDeleteId(batch.id)}
-                                  aria-label="Delete batch"
-                                  className="text-zinc-300 hover:text-red-500 text-lg leading-none h-7 w-7 flex items-center justify-center"
-                                >
-                                  ×
-                                </button>
-                              </div>
+                            {isEditing && editBatchError && (
+                              <p className="text-xs text-red-600 px-4 pb-2">{editBatchError}</p>
                             )}
                           </div>
                         );
