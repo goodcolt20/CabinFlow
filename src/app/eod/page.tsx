@@ -385,7 +385,7 @@ export default function EodPage() {
                     {/* Numbers row — same grid as header */}
                     <div className="grid grid-cols-[1fr_40px_36px_36px_40px_52px] sm:grid-cols-[1fr_52px_48px_52px_52px_68px] gap-1 sm:gap-2 px-2 sm:px-4 pb-3 items-center text-sm">
                       <span className="text-xs text-zinc-400">{row.product.unit}</span>
-                      <span className="text-right font-medium text-zinc-800">{row.total}</span>
+                      <span className="text-right text-zinc-600">{row.total}</span>
                       <span className="text-right text-zinc-600">{row.prepped}</span>
                       <div className="text-right">
                         {editingId === row.saleId && row.saleId ? (
@@ -414,7 +414,7 @@ export default function EodPage() {
                       </div>
                       <span className="text-right text-zinc-600">{row.counted}</span>
                       <span className={`text-right font-medium ${
-                        row.variance < 0 ? "text-red-600" : row.variance === 0 ? "text-green-600" : "text-amber-600"
+                        row.variance < 0 ? "text-red-600" : row.variance === 0 ? "text-green-600" : "text-blue-600"
                       }`}>
                         {row.variance > 0 ? `+${row.variance}` : row.variance}
                       </span>
