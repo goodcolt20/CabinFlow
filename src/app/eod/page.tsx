@@ -11,6 +11,7 @@ interface Product {
   name: string;
   unit: string;
   category: string;
+  defaultShelfLifeDays: number | null;
 }
 
 interface QueueItem {
@@ -25,6 +26,7 @@ interface CountRow {
 
 interface SummaryRow {
   product: Product;
+  total: number;
   prepped: number;
   sold: number;
   counted: number;
@@ -56,6 +58,7 @@ export default function EodPage() {
   const [submitting, setSubmitting] = useState(false);
   const [summary, setSummary] = useState<SummaryRow[] | null>(null);
   const [editingSummary, setEditingSummary] = useState(false);
+  const [savingPrepIds, setSavingPrepIds] = useState<Set<number>>(new Set());
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editingQty, setEditingQty] = useState("");
   const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
@@ -95,6 +98,10 @@ export default function EodPage() {
     const productMap: Record<number, Product> = {};
     for (const p of productList) productMap[p.id] = p;
 
+    const totalMap: Record<number, number> = {};
+    for (const { product, totalRemaining } of dashRes.stockLevels ?? []) {
+      totalMap[product.id] = totalRemaining ?? 0;
+    }
     const prepMap: Record<number, number> = {};
     for (const { batch, product } of dashRes.todayBatches ?? []) {
       prepMap[product.id] = (prepMap[product.id] ?? 0) + batch.quantityPrepped;
@@ -119,14 +126,16 @@ export default function EodPage() {
     for (const id of allIds) {
       if (!productMap[id]) continue;
       const prepped = prepMap[id] ?? 0;
+      const total = totalMap[id] ?? 0;
       const sold = soldMap[id] ?? 0;
       const counted = countedMap[id] ?? 0;
       rows.push({
         product: productMap[id],
+        total,
         prepped,
         sold,
         counted,
-        variance: counted - (prepped - sold),
+        variance: counted - total,
         saleId: saleIdMap[id],
       });
     }
@@ -210,6 +219,22 @@ export default function EodPage() {
   const deleteSale = async (id: number) => {
     setConfirmDeleteId(null);
     await fetch(`/api/sales?id=${id}`, { method: "DELETE" });
+    await loadSummary(products, date);
+  };
+
+  const saveOverflowAsPrep = async (row: SummaryRow) => {
+    setSavingPrepIds((prev) => new Set(prev).add(row.product.id));
+    await fetch("/api/batches", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        productId: row.product.id,
+        datePrepped: date,
+        quantityPrepped: row.variance,
+        shelfLifeDays: row.product.defaultShelfLifeDays ?? 1,
+      }),
+    });
+    setSavingPrepIds((prev) => { const s = new Set(prev); s.delete(row.product.id); return s; });
     await loadSummary(products, date);
   };
 
@@ -334,8 +359,9 @@ export default function EodPage() {
             <Card>
               <CardContent className="p-0">
                 {/* Header */}
-                <div className="grid grid-cols-[1fr_52px_52px_52px_60px] sm:grid-cols-[1fr_60px_72px_60px_68px] gap-1 sm:gap-2 px-2 sm:px-4 py-2 border-b bg-zinc-50">
+                <div className="grid grid-cols-[1fr_40px_36px_36px_40px_52px] sm:grid-cols-[1fr_52px_48px_52px_52px_68px] gap-1 sm:gap-2 px-2 sm:px-4 py-2 border-b bg-zinc-50">
                   <span className="text-xs font-medium text-zinc-500">Product</span>
+                  <span className="text-xs font-medium text-zinc-500 text-right">Total</span>
                   <span className="text-xs font-medium text-zinc-500 text-right">Prep</span>
                   <span className="text-xs font-medium text-zinc-500 text-right">Sold</span>
                   <span className="text-xs font-medium text-zinc-500 text-right">Count</span>
@@ -357,8 +383,9 @@ export default function EodPage() {
                       )}
                     </div>
                     {/* Numbers row — same grid as header */}
-                    <div className="grid grid-cols-[1fr_52px_52px_52px_60px] sm:grid-cols-[1fr_60px_72px_60px_68px] gap-1 sm:gap-2 px-2 sm:px-4 pb-3 items-center text-sm">
+                    <div className="grid grid-cols-[1fr_40px_36px_36px_40px_52px] sm:grid-cols-[1fr_52px_48px_52px_52px_68px] gap-1 sm:gap-2 px-2 sm:px-4 pb-3 items-center text-sm">
                       <span className="text-xs text-zinc-400">{row.product.unit}</span>
+                      <span className="text-right font-medium text-zinc-800">{row.total}</span>
                       <span className="text-right text-zinc-600">{row.prepped}</span>
                       <div className="text-right">
                         {editingId === row.saleId && row.saleId ? (
@@ -407,6 +434,37 @@ export default function EodPage() {
                         </div>
                       </div>
                     )}
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          )}
+          {/* Surplus card — shown when any row has variance > 0 */}
+          {summary !== null && summary.some((r) => r.variance > 0) && (
+            <Card className="border-amber-200">
+              <CardContent className="p-0">
+                <div className="px-3 py-2 border-b bg-amber-50">
+                  <p className="text-xs font-medium text-amber-700 uppercase tracking-wide">
+                    Unaccounted Surplus
+                  </p>
+                </div>
+                {summary.filter((r) => r.variance > 0).map((row) => (
+                  <div key={row.product.id} className="flex items-center justify-between gap-3 px-3 py-2.5 border-b last:border-b-0">
+                    <div>
+                      <p className="text-sm font-medium text-zinc-900">{row.product.name}</p>
+                      <p className="text-xs text-zinc-400">
+                        +{row.variance} {row.product.unit} over system total
+                      </p>
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="text-xs shrink-0"
+                      disabled={savingPrepIds.has(row.product.id)}
+                      onClick={() => saveOverflowAsPrep(row)}
+                    >
+                      {savingPrepIds.has(row.product.id) ? "Saving…" : "Save as prep"}
+                    </Button>
                   </div>
                 ))}
               </CardContent>
