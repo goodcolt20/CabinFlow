@@ -64,7 +64,9 @@ export default function EodPage() {
   const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
 
   const rowRefs = useRef<Record<number, HTMLSelectElement | null>>({});
+  const qtyRefs = useRef<Record<number, HTMLInputElement | null>>({});
   const lastAddedKey = useRef<number | null>(null);
+  const focusQtyOnAdd = useRef(false);
 
   useEffect(() => {
     fetch("/api/products").then((r) => r.json()).then(setProducts);
@@ -81,10 +83,15 @@ export default function EodPage() {
     if (products.length > 0) loadSummary(products, date);
   }, [date, products]); // eslint-disable-line
 
-  // Focus the product select of a newly added row
+  // Focus the appropriate field of a newly added row
   useEffect(() => {
     if (lastAddedKey.current !== null) {
-      rowRefs.current[lastAddedKey.current]?.focus();
+      if (focusQtyOnAdd.current) {
+        qtyRefs.current[lastAddedKey.current]?.focus();
+        focusQtyOnAdd.current = false;
+      } else {
+        rowRefs.current[lastAddedKey.current]?.focus();
+      }
       lastAddedKey.current = null;
     }
   }, [queue]);
@@ -171,8 +178,20 @@ export default function EodPage() {
     });
   };
 
-  const handleEnter = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter") { e.preventDefault(); addRow(); }
+  const handleSelectEnter = (e: React.KeyboardEvent, key: number) => {
+    if (e.key === "Enter") { e.preventDefault(); qtyRefs.current[key]?.focus(); }
+  };
+
+  const handleQtyEnter = (e: React.KeyboardEvent, key: number, idx: number) => {
+    if (e.key !== "Enter") return;
+    e.preventDefault();
+    const nextRow = queue[idx + 1];
+    if (nextRow) {
+      qtyRefs.current[nextRow.key]?.focus();
+    } else {
+      focusQtyOnAdd.current = true;
+      addRow();
+    }
   };
 
   const submitAll = async () => {
@@ -293,7 +312,7 @@ export default function EodPage() {
                 ref={(el) => { rowRefs.current[row.key] = el; }}
                 value={row.productId}
                 onChange={(e) => updateRow(row.key, "productId", e.target.value)}
-                onKeyDown={handleEnter}
+                onKeyDown={(e) => handleSelectEnter(e, row.key)}
                 className="border rounded px-3 py-2.5 text-sm bg-white w-full min-w-0"
               >
                 <option value="">Product...</option>
@@ -307,12 +326,13 @@ export default function EodPage() {
               </select>
 
               <Input
+                ref={(el) => { qtyRefs.current[row.key] = el; }}
                 type="number"
                 min={0}
                 step={0.1}
                 value={row.qty}
                 onChange={(e) => updateRow(row.key, "qty", e.target.value)}
-                onKeyDown={handleEnter}
+                onKeyDown={(e) => handleQtyEnter(e, row.key, idx)}
                 placeholder="0"
                 className="py-2.5"
               />
